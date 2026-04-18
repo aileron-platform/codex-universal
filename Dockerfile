@@ -21,65 +21,65 @@ USER developer
 
 RUN sudo apt-get update \
     && sudo apt-get install -y --no-install-recommends \
-        binutils=2.42-* \
-        sudo=1.9.* \
-        build-essential=12.10* \
-        curl=8.5.* \
-        default-libmysqlclient-dev=1.1.* \
-        dnsutils=1:9.18.* \
-        fd-find=9.0.* \
-        gettext=0.21-* \
-        git=1:2.43.* \
-        git-lfs=3.4.* \
-        gnupg=2.4.* \
-        inotify-tools=3.22.* \
-        iputils-ping=3:20240117-* \
-        jq=1.7.* \
-        libbz2-dev=1.0.* \
-        libc6=2.39-* \
-        libc6-dev=2.39-* \
-        libcurl4-openssl-dev=8.5.* \
-        libdb-dev=1:5.3.* \
-        libedit2=3.1-* \
-        libffi-dev=3.4.* \
-        libgcc-13-dev=13.3.* \
-        libgssapi-krb5-2=1.20.* \
-        liblzma-dev=5.6.* \
-        libncurses-dev=6.4+20240113-* \
-        libnss3-dev=2:3.98-* \
+        binutils \
+        sudo \
+        build-essential \
+        curl \
+        default-libmysqlclient-dev \
+        dnsutils \
+        fd-find \
+        gettext \
+        git \
+        git-lfs \
+        gnupg \
+        inotify-tools \
+        iputils-ping \
+        jq \
+        libbz2-dev \
+        libc6 \
+        libc6-dev \
+        libcurl4-openssl-dev \
+        libdb-dev \
+        libedit2 \
+        libffi-dev \
+        libgcc-13-dev \
+        libgssapi-krb5-2 \
+        liblzma-dev \
+        libncurses-dev \
+        libnss3-dev \
         libpq-dev \
-        libpsl-dev=0.21.* \
+        libpsl-dev \
         libpython3.12-dev \
-        libreadline-dev=8.2-* \
+        libreadline-dev \
         libsqlite3-dev \
-        libssl-dev=3.0.* \
-        libstdc++-13-dev=13.3.* \
-        libunwind8=1.6.* \
-        libuuid1=2.39.* \
-        libxml2-dev=2.9.* \
-        libz3-dev=4.8.* \
-        make=4.3-* \
-        moreutils=0.69-* \
-        netcat-openbsd=1.226-* \
-        openssh-client=1:9.6p1-* \
-        pkg-config=1.8.* \
-        protobuf-compiler=3.21.* \
-        ripgrep=14.1.* \
-        rsync=3.2.* \
-        software-properties-common=0.99.* \
-        sqlite3=3.45.* \
-        swig3.0=3.0.* \
-        tk-dev=8.6.* \
-        tzdata=2025b-* \
-        universal-ctags=5.9.* \
-        unixodbc-dev=2.3.* \
-        unzip=6.0-* \
-        uuid-dev=2.39.* \
-        wget=1.21.* \
-        xz-utils=5.6.* \
-        zip=3.0-* \
-        zlib1g=1:1.3.* \
-        zlib1g-dev=1:1.3.* \
+        libssl-dev \
+        libstdc++-13-dev \
+        libunwind8 \
+        libuuid1 \
+        libxml2-dev \
+        libz3-dev \
+        make \
+        moreutils \
+        netcat-openbsd \
+        openssh-client \
+        pkg-config \
+        protobuf-compiler \
+        ripgrep \
+        rsync \
+        software-properties-common \
+        sqlite3 \
+        swig3.0 \
+        tk-dev \
+        tzdata \
+        universal-ctags \
+        unixodbc-dev \
+        unzip \
+        uuid-dev \
+        wget \
+        xz-utils \
+        zip \
+        zlib1g \
+        zlib1g-dev \
     && sudo rm -rf /var/lib/apt/lists/*
 
 ### MISE ###
@@ -124,7 +124,7 @@ RUN git -c advice.detachedHead=0 clone --branch "$PYENV_VERSION" --depth 1 https
 ENV PIPX_BIN_DIR=$HOME/.local/bin
 ENV PATH=$PIPX_BIN_DIR:$PATH
 RUN sudo apt-get update \
-    && sudo apt-get install -y --no-install-recommends pipx=1.4.* \
+    && sudo apt-get install -y --no-install-recommends pipx \
     && sudo rm -rf /var/lib/apt/lists/* \
     && pipx install --pip-args="--no-cache-dir --no-compile" poetry==2.1.* uv==0.7.* \
     && for pyv in "${PYENV_ROOT}/versions/"*; do \
@@ -183,10 +183,14 @@ RUN JAVA_VERSIONS="$( [ "$TARGETARCH" = "arm64" ] && echo "21 17" || echo "21 17
 # Install Java 8 via apt for amd64 only (mise doesn't support Java 8)
 RUN if [ "$TARGETARCH" != "arm64" ]; then \
         sudo apt-get update && \
-        sudo apt-get install -y openjdk-8-jdk && \
-        sudo rm -rf /var/lib/apt/lists/* && \
-        sudo update-alternatives --install /usr/bin/java java /usr/lib/jvm/java-8-openjdk-amd64/bin/java 1 && \
-        sudo update-alternatives --install /usr/bin/javac javac /usr/lib/jvm/java-8-openjdk-amd64/bin/javac 1; \
+        if apt-cache show openjdk-8-jdk >/dev/null 2>&1; then \
+            sudo apt-get install -y --no-install-recommends openjdk-8-jdk && \
+            sudo update-alternatives --install /usr/bin/java java /usr/lib/jvm/java-8-openjdk-amd64/bin/java 1 && \
+            sudo update-alternatives --install /usr/bin/javac javac /usr/lib/jvm/java-8-openjdk-amd64/bin/javac 1; \
+        else \
+            echo "openjdk-8-jdk not available on this base image, skipping"; \
+        fi && \
+        sudo rm -rf /var/lib/apt/lists/*; \
     fi
 
 ### SETUP SCRIPTS ###
