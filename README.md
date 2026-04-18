@@ -1,69 +1,66 @@
 # codex-universal
 
-`codex-universal` is a reference implementation of the base Docker image available in [OpenAI Codex](http://platform.openai.com/docs/codex).
+基於 [OpenAI codex-universal](https://github.com/openai/codex-universal) 的自訂版本，作為 `workspace-runtime` 的 base image。
 
-This repository is intended to help developers cutomize environments in Codex, by providing a similar image that can be pulled and run locally. This is not an identical environment but should help for debugging and development.
+## 與公版的差異
 
-For more details on environment setup, see [OpenAI Codex](http://platform.openai.com/docs/codex).
+公版以 `root` 身份執行所有安裝，工具路徑在 `/root/` 底下。
+本專案修改為以 `developer` 使用者執行，工具安裝在 `/home/developer/` 底下，
+以便 workspace-runtime container 內以非 root 身份運行服務。
 
-## Usage
+主要修改：
+- 新增 `developer` 使用者（含 sudo 免密碼權限）
+- 所有工具（pyenv、nvm、mise、pipx）安裝在 `/home/developer/` 路徑
+- 移除本專案不需要的語言（Rust、Go、Swift、Ruby、PHP、Elixir、Bun、LLVM 等）
+- 精簡 Java 版本（僅保留 8、17、21）
 
-The Docker image is available at:
+## Build
 
-```
-docker pull ghcr.io/openai/codex-universal:latest
-```
+此 image 需要 **pre-build**，workspace-runtime 透過 `docker-image://` 引用它。
 
-This repository builds the image for both linux/amd64 and linux/arm64. However we only run the linux/amd64 version.
-Your installed Docker may support linux/amd64 emulation by passing the `--platform linux/amd64` flag.
+```bash
+# 首次或修改 Dockerfile 後執行（僅需一次）
+docker build -t jarvischen/codex-universal:custom ./workspace-runtime/codex-universal
 
-The arm64 image differs from the amd64 image in 2 ways:
-- OpenJDK 10 is not available on amd64
-- The arm64 image skips installing swift because of a current bug with mise
-
-The below script shows how can you approximate the `setup` environment in Codex:
-
-```sh
-# See below for environment variable options.
-# This script mounts the current directory similar to how it would get cloned in.
-docker run --rm -it \
-    -e CODEX_ENV_PYTHON_VERSION=3.12 \
-    -e CODEX_ENV_NODE_VERSION=20 \
-    -e CODEX_ENV_RUST_VERSION=1.87.0 \
-    -e CODEX_ENV_GO_VERSION=1.23.8 \
-    -e CODEX_ENV_SWIFT_VERSION=6.2 \
-    -e CODEX_ENV_RUBY_VERSION=3.4.4 \
-    -e CODEX_ENV_PHP_VERSION=8.4 \
-    -v $(pwd):/workspace/$(basename $(pwd)) -w /workspace/$(basename $(pwd)) \
-    ghcr.io/openai/codex-universal:latest
+# 之後就可以正常 build workspace-runtime
+docker compose build workspace-runtime
 ```
 
-`codex-universal` includes setup scripts that look for `CODEX_ENV_*` environment variables and configures the language version accordingly.
+> **注意**：首次 build 需下載並編譯 Python、Node.js、Java 等，耗時較長（約 30-60 分鐘）。
+> 後續 rebuild 若未修改 Dockerfile，Docker layer cache 會大幅加速。
 
-### Configuring language runtimes
+## 為什麼不能用 additional_contexts 直接 inline build？
 
-The following environment variables can be set to configure runtime installation. Note that a limited subset of versions are supported (indicated in the table below):
+Docker Compose 的 `additional_contexts` 搭配本地目錄時，BuildKit 會嘗試 inline build，
+但此 Dockerfile 安裝內容龐大，inline build 容易失敗並產出損壞的 image，
+導致 workspace-runtime Dockerfile 中的 `USER root` 出現 `unable to find user root` 錯誤。
 
-| Environment variable       | Description                | Supported versions                               | Additional packages                                                  |
-| -------------------------- | -------------------------- | ------------------------------------------------ | -------------------------------------------------------------------- |
-| `CODEX_ENV_PYTHON_VERSION` | Python version to install  | `3.10`, `3.11.12`, `3.12`, `3.13`, `3.14.0`        | `pyenv`, `poetry`, `uv`, `ruff`, `black`, `mypy`, `pyright`, `isort` |
-| `CODEX_ENV_NODE_VERSION`   | Node.js version to install | `18`, `20`, `22`                                 | `corepack`, `yarn`, `pnpm`, `npm`                                    |
-| `CODEX_ENV_RUST_VERSION`   | Rust version to install    | `1.83.0`, `1.84.1`, `1.85.1`, `1.86.0`, `1.87.0` |                                                                      |
-| `CODEX_ENV_GO_VERSION`     | Go version to install      | `1.22.12`, `1.23.8`, `1.24.3`, `1.25.1`           |                                                                      |
-| `CODEX_ENV_SWIFT_VERSION`  | Swift version to install   | `5.10`, `6.1`, `6.2`                              |                                                                      |
-| `CODEX_ENV_RUBY_VERSION`   | Ruby version to install  | `3.2.3`, `3.3.8`, `3.4.4`                |                                                                      |
-| `CODEX_ENV_PHP_VERSION`   | PHP version to install  | `8.4`, `8.3`, `8.2`                |                                                                      |
+改用 `docker-image://jarvischen/codex-universal:custom` 引用 pre-built image 可避免此問題。
 
+## docker-compose.yml 設定
 
+```yaml
+workspace-runtime:
+  build:
+    additional_contexts:
+      codex-universal: docker-image://jarvischen/codex-universal:custom
+```
 
-## What's included
+## 語言環境
 
-In addition to the packages specified in the table above, the following packages are also installed:
+| 語言    | 版本                                    | 管理工具 |
+| ------- | --------------------------------------- | -------- |
+| Python  | 3.10, 3.11.12, 3.12, 3.13, 3.14.0      | pyenv    |
+| Node.js | 18, 20, 22, 24                          | nvm      |
+| Java    | 8, 17, 21                               | mise     |
 
-- `bun`: 1.2.10
-- `java`: 21
-- `bazelisk` / `bazel`
-- `erlang`: 27.1.2
-- `elixir`: 1.18.3
+### 執行時版本切換
 
-See [Dockerfile](Dockerfile) for the full details of installed packages.
+透過 `CODEX_ENV_*` 環境變數設定：
+
+| 環境變數                   | 說明              |
+| -------------------------- | ----------------- |
+| `CODEX_ENV_PYTHON_VERSION` | Python 版本       |
+| `CODEX_ENV_NODE_VERSION`   | Node.js 版本      |
+
+詳見 `setup_universal.sh`。
