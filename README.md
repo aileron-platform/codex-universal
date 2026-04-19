@@ -14,14 +14,17 @@ Main changes:
 
 ## Build
 
-This image must be built ahead of time. `workspace-runtime` references it through `docker-image://`.
+This image is published by this repository's GitHub Actions workflow to Docker Hub as `ailerondocker/codex-universal`.
+`workspace-runtime` should reference the published image through `docker-image://`.
 
 ```bash
-# Run once after the first setup or after modifying the Dockerfile
-docker build -t ailerondocker/codex-universal:custom ./workspace-runtime/codex-universal
+# Build locally when you need to validate Dockerfile changes before pushing
+docker build -t ailerondocker/codex-universal:latest .
 
-# Then build workspace-runtime normally
-docker compose build workspace-runtime
+# After changes are merged to main, GitHub Actions publishes:
+# - ailerondocker/codex-universal:latest-amd64
+# - ailerondocker/codex-universal:latest-arm64
+# - ailerondocker/codex-universal:latest
 ```
 
 The first build is expensive because it downloads and installs Python, Node.js, Java, and other tooling. Expect roughly 30 to 60 minutes. Rebuilds are much faster if the Dockerfile has not changed.
@@ -30,7 +33,7 @@ The first build is expensive because it downloads and installs Python, Node.js, 
 
 When Docker Compose uses a local directory in `additional_contexts`, BuildKit may attempt an inline build. This Dockerfile is large enough that inline builds can fail and produce a broken image, which then causes errors such as `unable to find user root` in the `workspace-runtime` Dockerfile.
 
-Using a pre-built image via `docker-image://ailerondocker/codex-universal:custom` avoids that failure mode.
+Using a pre-built image via `docker-image://ailerondocker/codex-universal:latest` avoids that failure mode.
 
 ## `docker-compose.yml` Example
 
@@ -38,7 +41,7 @@ Using a pre-built image via `docker-image://ailerondocker/codex-universal:custom
 workspace-runtime:
   build:
     additional_contexts:
-      codex-universal: docker-image://ailerondocker/codex-universal:custom
+      codex-universal: docker-image://ailerondocker/codex-universal:latest
 ```
 
 ## Language Runtimes
