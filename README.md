@@ -1,66 +1,61 @@
-# codex-universal
+Customized from [OpenAI codex-universal](https://github.com/openai/codex-universal) and used as the base image for `workspace-runtime`.
 
-基於 [OpenAI codex-universal](https://github.com/openai/codex-universal) 的自訂版本，作為 `workspace-runtime` 的 base image。
+## Key Differences from Upstream
 
-## 與公版的差異
+The upstream image installs everything as `root` under `/root/`.
+This repo adapts it to run as `developer`, with tools installed under `/home/developer/`, so services inside `workspace-runtime` can run without root privileges.
 
-公版以 `root` 身份執行所有安裝，工具路徑在 `/root/` 底下。
-本專案修改為以 `developer` 使用者執行，工具安裝在 `/home/developer/` 底下，
-以便 workspace-runtime container 內以非 root 身份運行服務。
+Main changes:
 
-主要修改：
-- 新增 `developer` 使用者（含 sudo 免密碼權限）
-- 所有工具（pyenv、nvm、mise、pipx）安裝在 `/home/developer/` 路徑
-- 移除本專案不需要的語言（Rust、Go、Swift、Ruby、PHP、Elixir、Bun、LLVM 等）
-- 精簡 Java 版本（僅保留 8、17、21）
+- add a `developer` user with passwordless sudo
+- install tools such as `pyenv`, `nvm`, `mise`, and `pipx` under `/home/developer/`
+- remove language stacks not needed by this project, such as Rust, Go, Swift, Ruby, PHP, Elixir, Bun, and LLVM
+- keep only Java 8, 17, and 21
 
 ## Build
 
-此 image 需要 **pre-build**，workspace-runtime 透過 `docker-image://` 引用它。
+This image must be built ahead of time. `workspace-runtime` references it through `docker-image://`.
 
 ```bash
-# 首次或修改 Dockerfile 後執行（僅需一次）
-docker build -t jarvischen/codex-universal:custom ./workspace-runtime/codex-universal
+# Run once after the first setup or after modifying the Dockerfile
+docker build -t ailerondocker/codex-universal:custom ./workspace-runtime/codex-universal
 
-# 之後就可以正常 build workspace-runtime
+# Then build workspace-runtime normally
 docker compose build workspace-runtime
 ```
 
-> **注意**：首次 build 需下載並編譯 Python、Node.js、Java 等，耗時較長（約 30-60 分鐘）。
-> 後續 rebuild 若未修改 Dockerfile，Docker layer cache 會大幅加速。
+The first build is expensive because it downloads and installs Python, Node.js, Java, and other tooling. Expect roughly 30 to 60 minutes. Rebuilds are much faster if the Dockerfile has not changed.
 
-## 為什麼不能用 additional_contexts 直接 inline build？
+## Why Not Use Inline `additional_contexts`?
 
-Docker Compose 的 `additional_contexts` 搭配本地目錄時，BuildKit 會嘗試 inline build，
-但此 Dockerfile 安裝內容龐大，inline build 容易失敗並產出損壞的 image，
-導致 workspace-runtime Dockerfile 中的 `USER root` 出現 `unable to find user root` 錯誤。
+When Docker Compose uses a local directory in `additional_contexts`, BuildKit may attempt an inline build. This Dockerfile is large enough that inline builds can fail and produce a broken image, which then causes errors such as `unable to find user root` in the `workspace-runtime` Dockerfile.
 
-改用 `docker-image://jarvischen/codex-universal:custom` 引用 pre-built image 可避免此問題。
+Using a pre-built image via `docker-image://ailerondocker/codex-universal:custom` avoids that failure mode.
 
-## docker-compose.yml 設定
+## `docker-compose.yml` Example
 
 ```yaml
 workspace-runtime:
   build:
     additional_contexts:
-      codex-universal: docker-image://jarvischen/codex-universal:custom
+      codex-universal: docker-image://ailerondocker/codex-universal:custom
 ```
 
-## 語言環境
+## Language Runtimes
 
-| 語言    | 版本                                    | 管理工具 |
-| ------- | --------------------------------------- | -------- |
-| Python  | 3.10, 3.11.12, 3.12, 3.13, 3.14.0      | pyenv    |
-| Node.js | 18, 20, 22, 24                          | nvm      |
-| Java    | 8, 17, 21                               | mise     |
+| Language | Versions | Manager |
+|---|---|---|
+| Python | 3.10, 3.11.12, 3.12, 3.13, 3.14.0 | `pyenv` |
+| Node.js | 18, 20, 22, 24 | `nvm` |
+| Java | 8, 17, 21 | `mise` |
 
-### 執行時版本切換
+### Runtime Version Selection
 
-透過 `CODEX_ENV_*` 環境變數設定：
+Use `CODEX_ENV_*` environment variables:
 
-| 環境變數                   | 說明              |
-| -------------------------- | ----------------- |
-| `CODEX_ENV_PYTHON_VERSION` | Python 版本       |
-| `CODEX_ENV_NODE_VERSION`   | Node.js 版本      |
+| Variable | Purpose |
+|---|---|
+| `CODEX_ENV_PYTHON_VERSION` | Python version |
+| `CODEX_ENV_NODE_VERSION` | Node.js version |
 
-詳見 `setup_universal.sh`。
+See `setup_universal.sh` for details.
